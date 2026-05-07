@@ -53,7 +53,22 @@ button.primary:hover { background: #4f46e5; }
   font-family: ui-monospace, monospace;
   font-size: 12px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+#results li .fields { flex: 1; min-width: 0; }
+.fill-btn {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  background: #0f172a;
+  border: 1px solid #6366f1;
+  color: #a5b4fc;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.fill-btn:hover { background: #6366f1; color: white; }
 #results li:hover { border-color: #6366f1; }
 #results li .field {
   display: inline-block;

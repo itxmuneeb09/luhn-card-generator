@@ -1,12 +1,7 @@
 /* Luhn Card Generator — popup logic */
 
 function luhnCheckDigit(numWithoutCheck) {
-  // Compute the Luhn check digit for a string of digits.
   let sum = 0;
-  // Position from right of the final number — check digit will be at pos 1.
-  // So digits in numWithoutCheck are at positions 2,3,4,... from the right.
-  // Double every digit at even position from the right of the FULL number,
-  // which corresponds to every other digit starting from the rightmost of numWithoutCheck.
   for (let i = 0; i < numWithoutCheck.length; i++) {
     let d = parseInt(numWithoutCheck[numWithoutCheck.length - 1 - i], 10);
     if (i % 2 === 0) {
@@ -18,9 +13,7 @@ function luhnCheckDigit(numWithoutCheck) {
   return (10 - (sum % 10)) % 10;
 }
 
-function randDigit() {
-  return Math.floor(Math.random() * 10).toString();
-}
+function randDigit() { return Math.floor(Math.random() * 10).toString(); }
 
 function generateCardNumber(bin, length) {
   let body = bin;
@@ -44,6 +37,9 @@ function generateCvv(bin) {
   return v;
 }
 
+const NAMES = ["QA Tester", "Test User", "Sandbox Buyer", "Dev Account", "Demo Customer"];
+function pickName() { return NAMES[Math.floor(Math.random() * NAMES.length)]; }
+
 function generateBatch(bin, length, count) {
   const seen = new Set();
   const out = [];
@@ -54,7 +50,7 @@ function generateBatch(bin, length, count) {
     if (seen.has(number)) continue;
     seen.add(number);
     const { mm, yy } = generateExpiry();
-    out.push({ number, mm, yy, cvv: generateCvv(bin) });
+    out.push({ number, mm, yy, cvv: generateCvv(bin), name: pickName() });
   }
   return out;
 }
@@ -65,15 +61,40 @@ function toast(msg) {
   el.textContent = msg;
   el.hidden = false;
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 1200);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 1600);
 }
 
 async function copy(text) {
   try {
     await navigator.clipboard.writeText(text);
     toast("Copied: " + (text.length > 20 ? text.slice(0, 20) + "…" : text));
+  } catch { toast("Copy failed"); }
+}
+
+async function autofillCard(card) {
+  if (!chrome?.tabs || !chrome?.scripting) {
+    toast("AutoFill unavailable");
+    return;
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) { toast("No active tab"); return; }
+  const send = () => chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", card });
+  try {
+    const res = await send();
+    if (res && res.filled > 0) toast(`Filled ${res.filled} field(s)`);
+    else toast("No payment form detected.");
   } catch {
-    toast("Copy failed");
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: ["content.js"],
+      });
+      const res = await send();
+      if (res && res.filled > 0) toast(`Filled ${res.filled} field(s)`);
+      else toast("No payment form detected.");
+    } catch {
+      toast("Cannot access this page");
+    }
   }
 }
 
@@ -85,6 +106,9 @@ function render(batch) {
   for (const card of batch) {
     const li = document.createElement("li");
     const line = `${card.number}|${card.mm}|${card.yy}|${card.cvv}`;
+
+    const fields = document.createElement("div");
+    fields.className = "fields";
 
     const num = document.createElement("span");
     num.className = "field num";
@@ -104,9 +128,19 @@ function render(batch) {
     cvv.title = "Click to copy CVV";
     cvv.addEventListener("click", (e) => { e.stopPropagation(); copy(card.cvv); });
 
-    li.appendChild(num);
-    li.appendChild(exp);
-    li.appendChild(cvv);
+    fields.appendChild(num);
+    fields.appendChild(exp);
+    fields.appendChild(cvv);
+
+    const fillBtn = document.createElement("button");
+    fillBtn.type = "button";
+    fillBtn.className = "fill-btn";
+    fillBtn.textContent = "AutoFill";
+    fillBtn.title = "Fill this card into the active page's payment form";
+    fillBtn.addEventListener("click", (e) => { e.stopPropagation(); autofillCard(card); });
+
+    li.appendChild(fields);
+    li.appendChild(fillBtn);
     li.title = "Click background to copy full row";
     li.addEventListener("click", () => copy(line));
 
@@ -156,12 +190,17 @@ function download(filename, content, type) {
 
 document.getElementById("csv").addEventListener("click", () => {
   if (!lastBatch.length) { toast("Generate first"); return; }
-  const rows = ["number,mm,yy,cvv", ...lastBatch.map(c => `${c.number},${c.mm},${c.yy},${c.cvv}`)];
+  const rows = ["number,mm,yy,cvv,name", ...lastBatch.map(c => `${c.number},${c.mm},${c.yy},${c.cvv},${c.name}`)];
   download("cards.csv", rows.join("\n"), "text/csv");
 });
 
 document.getElementById("txt").addEventListener("click", () => {
   if (!lastBatch.length) { toast("Generate first"); return; }
-  const rows = lastBatch.map(c => `${c.number}|${c.mm}|${c.yy}|${c.cvv}`);
+  const rows = lastBatch.map(c => `${c.number}|${c.mm}|${c.yy}|${c.cvv}|${c.name}`);
   download("cards.txt", rows.join("\n"), "text/plain");
+});
+
+document.getElementById("autofill-first").addEventListener("click", () => {
+  if (!lastBatch.length) { toast("Generate first"); return; }
+  autofillCard(lastBatch[0]);
 });

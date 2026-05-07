@@ -92,6 +92,24 @@ function Index() {
           </p>
         </section>
 
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold">AutoFill</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Open a sandbox checkout page, generate a card in the popup, then
+            click <strong className="text-foreground">AutoFill</strong> on any
+            row (or the top AutoFill button for the first card). The extension
+            detects standard payment fields — card number, expiry, CVV, and
+            cardholder name — and fills them, dispatching real input and
+            change events so React, Vue, and Angular forms register the
+            values. If nothing matches, you'll see{" "}
+            <em>"No payment form detected."</em>
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Cross-origin hosted fields (e.g. Stripe Elements iframes) are
+            intentionally not supported.
+          </p>
+        </section>
+
         <Card className="mt-10 border-destructive/40">
           <CardContent className="flex gap-3 pt-6">
             <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />

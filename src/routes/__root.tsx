@@ -73,14 +73,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "AEGON HITTER" },
+      { name: "description", content: "Generates and autofills Luhn-valid test payment card details for web forms." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "AEGON HITTER" },
+      { property: "og:description", content: "Generates and autofills Luhn-valid test payment card details for web forms." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "AEGON HITTER" },
+      { name: "twitter:description", content: "Generates and autofills Luhn-valid test payment card details for web forms." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f0510c05-4b7c-4b85-bfcd-08803bbba6ae/id-preview-4af1551e--4d370c6f-982e-4eba-bad5-52d205af3153.lovable.app-1778156098815.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f0510c05-4b7c-4b85-bfcd-08803bbba6ae/id-preview-4af1551e--4d370c6f-982e-4eba-bad5-52d205af3153.lovable.app-1778156098815.png" },
     ],
     links: [
       {

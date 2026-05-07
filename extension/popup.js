@@ -1,19 +1,19 @@
-/* Luhn Card Generator — popup logic */
+/* Aegon Hitter — popup logic
+ * QA / sandbox / educational use only. Never auto-submits forms.
+ */
+
+// ============= Luhn + generation =============
 
 function luhnCheckDigit(numWithoutCheck) {
   let sum = 0;
   for (let i = 0; i < numWithoutCheck.length; i++) {
     let d = parseInt(numWithoutCheck[numWithoutCheck.length - 1 - i], 10);
-    if (i % 2 === 0) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
+    if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
     sum += d;
   }
   return (10 - (sum % 10)) % 10;
 }
-
-function randDigit() { return Math.floor(Math.random() * 10).toString(); }
+const randDigit = () => Math.floor(Math.random() * 10).toString();
 
 function generateCardNumber(bin, length) {
   let body = bin;
@@ -21,68 +21,136 @@ function generateCardNumber(bin, length) {
   body = body.slice(0, length - 1);
   return body + luhnCheckDigit(body).toString();
 }
-
-function generateExpiry() {
-  const month = String(Math.floor(Math.random() * 12) + 1).padStart(2, "0");
-  const yearOffset = Math.floor(Math.random() * 4) + 1;
-  const year = String((new Date().getFullYear() + yearOffset) % 100).padStart(2, "0");
-  return { mm: month, yy: year };
+function randomExpiry() {
+  const mm = String(Math.floor(Math.random() * 12) + 1).padStart(2, "0");
+  const yy = String((new Date().getFullYear() + Math.floor(Math.random() * 4) + 1) % 100).padStart(2, "0");
+  return { mm, yy };
 }
-
-function generateCvv(bin) {
-  const isAmex = bin.startsWith("34") || bin.startsWith("37");
-  const len = isAmex ? 4 : 3;
-  let v = "";
-  for (let i = 0; i < len; i++) v += randDigit();
+function randomCvv(bin) {
+  const len = (bin.startsWith("34") || bin.startsWith("37")) ? 4 : 3;
+  let v = ""; for (let i = 0; i < len; i++) v += randDigit();
   return v;
 }
 
-const NAMES = ["QA Tester", "Test User", "Sandbox Buyer", "Dev Account", "Demo Customer"];
-function pickName() { return NAMES[Math.floor(Math.random() * NAMES.length)]; }
+// ============= State =============
 
-function generateBatch(bin, length, count) {
-  const seen = new Set();
-  const out = [];
-  let attempts = 0;
-  while (out.length < count && attempts < count * 20) {
-    attempts++;
-    const number = generateCardNumber(bin, length);
-    if (seen.has(number)) continue;
-    seen.add(number);
-    const { mm, yy } = generateExpiry();
-    out.push({ number, mm, yy, cvv: generateCvv(bin), name: pickName() });
-  }
-  return out;
+const DEFAULT_STATE = { bins: [], activeBinId: null, cardholderName: "QA Tester" };
+let state = { ...DEFAULT_STATE };
+
+async function loadState() {
+  const res = await chrome.storage.local.get("aegon");
+  state = { ...DEFAULT_STATE, ...(res.aegon || {}) };
+}
+async function saveState() {
+  await chrome.storage.local.set({ aegon: state });
+}
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+// ============= Rendering =============
+
+function activeBin() { return state.bins.find(b => b.id === state.activeBinId) || null; }
+
+function renderActiveBin() {
+  const el = document.getElementById("active-bin-display");
+  const b = activeBin();
+  if (!b) { el.innerHTML = "— none — <span class='meta'>add a BIN to begin</span>"; return; }
+  el.innerHTML = `${b.digits} <span class="meta">${b.label} · len ${b.length}</span>`;
 }
 
-let toastTimer = null;
-function toast(msg) {
-  const el = document.getElementById("toast");
+function renderBinList() {
+  const ul = document.getElementById("bin-list");
+  ul.innerHTML = "";
+  for (const b of state.bins) {
+    const li = document.createElement("li");
+    li.className = "bin-item" + (b.id === state.activeBinId ? " active" : "");
+    li.innerHTML = `
+      <div class="info">
+        <div class="name">${escapeHtml(b.label)}</div>
+        <div class="digits">${b.digits} <span class="len">· len ${b.length}</span></div>
+      </div>
+    `;
+    const setBtn = document.createElement("button");
+    setBtn.textContent = b.id === state.activeBinId ? "ACTIVE" : "USE";
+    setBtn.disabled = b.id === state.activeBinId;
+    setBtn.addEventListener("click", async () => {
+      state.activeBinId = b.id;
+      await saveState();
+      renderAll();
+    });
+    const delBtn = document.createElement("button");
+    delBtn.className = "del";
+    delBtn.textContent = "DEL";
+    delBtn.addEventListener("click", async () => {
+      state.bins = state.bins.filter(x => x.id !== b.id);
+      if (state.activeBinId === b.id) state.activeBinId = state.bins[0]?.id || null;
+      await saveState();
+      renderAll();
+    });
+    li.appendChild(setBtn);
+    li.appendChild(delBtn);
+    ul.appendChild(li);
+  }
+}
+
+function renderSettings() {
+  document.getElementById("cardholder").value = state.cardholderName || "";
+}
+
+function renderAll() {
+  renderActiveBin();
+  renderBinList();
+  renderSettings();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// ============= Status =============
+
+function setStatus(msg, kind) {
+  const el = document.getElementById("status");
   el.textContent = msg;
-  el.hidden = false;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 1600);
+  el.className = "status" + (kind ? " " + kind : "");
 }
 
-async function copy(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Copied: " + (text.length > 20 ? text.slice(0, 20) + "…" : text));
-  } catch { toast("Copy failed"); }
+// ============= Tabs =============
+
+function initTabs() {
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.tab;
+      document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+      document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.dataset.panel === target));
+    });
+  });
 }
 
-async function autofillCard(card) {
-  if (!chrome?.tabs || !chrome?.scripting) {
-    toast("AutoFill unavailable");
-    return;
-  }
+// ============= START =============
+
+async function start() {
+  const b = activeBin();
+  if (!b) { setStatus("Add and select a BIN first.", "err"); return; }
+  const card = {
+    number: generateCardNumber(b.digits, b.length),
+    ...randomExpiry(),
+    cvv: randomCvv(b.digits),
+    name: state.cardholderName || "QA Tester",
+  };
+  card.mm = card.mm; // keep keys stable
+  setStatus(`Hitting ${b.label}…`);
+  const btn = document.getElementById("start");
+  btn.classList.remove("flash");
+  void btn.offsetWidth;
+  btn.classList.add("flash");
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) { toast("No active tab"); return; }
+  if (!tab?.id) { setStatus("No active tab.", "err"); return; }
+
   const send = () => chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", card });
   try {
     const res = await send();
-    if (res && res.filled > 0) toast(`Filled ${res.filled} field(s)`);
-    else toast("No payment form detected.");
+    handleResult(res);
   } catch {
     try {
       await chrome.scripting.executeScript({
@@ -90,117 +158,70 @@ async function autofillCard(card) {
         files: ["content.js"],
       });
       const res = await send();
-      if (res && res.filled > 0) toast(`Filled ${res.filled} field(s)`);
-      else toast("No payment form detected.");
+      handleResult(res);
     } catch {
-      toast("Cannot access this page");
+      setStatus("Cannot access this page.", "err");
     }
   }
 }
-
-let lastBatch = [];
-
-function render(batch) {
-  const ul = document.getElementById("results");
-  ul.innerHTML = "";
-  for (const card of batch) {
-    const li = document.createElement("li");
-    const line = `${card.number}|${card.mm}|${card.yy}|${card.cvv}`;
-
-    const fields = document.createElement("div");
-    fields.className = "fields";
-
-    const num = document.createElement("span");
-    num.className = "field num";
-    num.textContent = card.number;
-    num.title = "Click to copy number";
-    num.addEventListener("click", (e) => { e.stopPropagation(); copy(card.number); });
-
-    const exp = document.createElement("span");
-    exp.className = "field exp";
-    exp.textContent = `${card.mm}/${card.yy}`;
-    exp.title = "Click to copy expiry";
-    exp.addEventListener("click", (e) => { e.stopPropagation(); copy(`${card.mm}/${card.yy}`); });
-
-    const cvv = document.createElement("span");
-    cvv.className = "field cvv";
-    cvv.textContent = card.cvv;
-    cvv.title = "Click to copy CVV";
-    cvv.addEventListener("click", (e) => { e.stopPropagation(); copy(card.cvv); });
-
-    fields.appendChild(num);
-    fields.appendChild(exp);
-    fields.appendChild(cvv);
-
-    const fillBtn = document.createElement("button");
-    fillBtn.type = "button";
-    fillBtn.className = "fill-btn";
-    fillBtn.textContent = "AutoFill";
-    fillBtn.title = "Fill this card into the active page's payment form";
-    fillBtn.addEventListener("click", (e) => { e.stopPropagation(); autofillCard(card); });
-
-    li.appendChild(fields);
-    li.appendChild(fillBtn);
-    li.title = "Click background to copy full row";
-    li.addEventListener("click", () => copy(line));
-
-    ul.appendChild(li);
-  }
+function handleResult(res) {
+  if (res && res.filled > 0) setStatus(`Filled ${res.filled} field(s) · ${res.fields.join(", ")}`, "ok");
+  else setStatus("No payment form detected.", "err");
 }
 
-function showError(msg) {
-  const el = document.getElementById("error");
-  if (!msg) { el.hidden = true; el.textContent = ""; return; }
-  el.hidden = false;
-  el.textContent = msg;
+// ============= BIN form =============
+
+function initBinForm() {
+  const form = document.getElementById("bin-form");
+  const err = document.getElementById("bin-error");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.hidden = true; err.textContent = "";
+    const label = document.getElementById("bin-label").value.trim();
+    const digits = document.getElementById("bin-digits").value.replace(/\D/g, "");
+    const length = parseInt(document.getElementById("bin-length").value, 10);
+    try {
+      if (!label) throw new Error("Label required.");
+      if (digits.length < 4) throw new Error("BIN must be at least 4 digits.");
+      if (!(length >= 13 && length <= 19)) throw new Error("Length must be 13–19.");
+      if (digits.length >= length) throw new Error("BIN must be shorter than length.");
+      const bin = { id: uid(), label, digits, length };
+      state.bins.push(bin);
+      if (!state.activeBinId) state.activeBinId = bin.id;
+      await saveState();
+      form.reset();
+      document.getElementById("bin-length").value = 16;
+      renderAll();
+    } catch (ex) {
+      err.textContent = ex.message; err.hidden = false;
+    }
+  });
 }
 
-function readInputs() {
-  const bin = document.getElementById("bin").value.replace(/\D/g, "");
-  const length = parseInt(document.getElementById("length").value, 10);
-  const count = parseInt(document.getElementById("count").value, 10);
-  if (!bin) throw new Error("Enter at least one starting digit.");
-  if (!(length >= 13 && length <= 19)) throw new Error("Length must be 13–19.");
-  if (bin.length >= length) throw new Error("BIN must be shorter than total length.");
-  if (!(count >= 1 && count <= 100)) throw new Error("Count must be 1–100.");
-  return { bin, length, count };
+function initSettingsForm() {
+  const form = document.getElementById("settings-form");
+  const status = document.getElementById("settings-status");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    state.cardholderName = document.getElementById("cardholder").value.trim() || "QA Tester";
+    await saveState();
+    status.textContent = "Saved.";
+    setTimeout(() => { status.textContent = ""; }, 1200);
+  });
 }
 
-document.getElementById("form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  showError("");
-  try {
-    const { bin, length, count } = readInputs();
-    lastBatch = generateBatch(bin, length, count);
-    render(lastBatch);
-  } catch (err) {
-    showError(err.message);
-  }
-});
+// ============= Init =============
 
-function download(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-document.getElementById("csv").addEventListener("click", () => {
-  if (!lastBatch.length) { toast("Generate first"); return; }
-  const rows = ["number,mm,yy,cvv,name", ...lastBatch.map(c => `${c.number},${c.mm},${c.yy},${c.cvv},${c.name}`)];
-  download("cards.csv", rows.join("\n"), "text/csv");
-});
-
-document.getElementById("txt").addEventListener("click", () => {
-  if (!lastBatch.length) { toast("Generate first"); return; }
-  const rows = lastBatch.map(c => `${c.number}|${c.mm}|${c.yy}|${c.cvv}|${c.name}`);
-  download("cards.txt", rows.join("\n"), "text/plain");
-});
-
-document.getElementById("autofill-first").addEventListener("click", () => {
-  if (!lastBatch.length) { toast("Generate first"); return; }
-  autofillCard(lastBatch[0]);
-});
+(async function init() {
+  initTabs();
+  initBinForm();
+  initSettingsForm();
+  await loadState();
+  renderAll();
+  document.getElementById("start").addEventListener("click", start);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && document.querySelector(".panel.active")?.dataset.panel === "hitter") {
+      start();
+    }
+  });
+})();

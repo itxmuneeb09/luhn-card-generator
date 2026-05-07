@@ -1,12 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Luhn Card Generator",
-  "version": "1.0.0",
-  "description": "Generate Luhn-valid test card numbers from a BIN. For QA and testing only.",
+  "version": "1.1.0",
+  "description": "Generate Luhn-valid test card numbers from a BIN and AutoFill them into sandbox payment forms. For QA and testing only.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon.png",
     "default_title": "Luhn Card Generator"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
   "icons": { "128": "icon.png" }
 }

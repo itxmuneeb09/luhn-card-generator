@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Luhn Card Generator</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Luhn Card Generator</h1>
+      <p class="sub">Test cards only — not real payment instruments.</p>
+    </header>
+
+    <form id="form">
+      <label>
+        <span>BIN / starting digits</span>
+        <input id="bin" type="text" inputmode="numeric" placeholder="414720" value="414720" maxlength="18" />
+      </label>
+      <div class="row">
+        <label>
+          <span>Length</span>
+          <input id="length" type="number" min="13" max="19" value="16" />
+        </label>
+        <label>
+          <span>Count</span>
+          <input id="count" type="number" min="1" max="100" value="10" />
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary">Generate</button>
+        <button type="button" id="csv">CSV</button>
+        <button type="button" id="txt">TXT</button>
+      </div>
+      <p id="error" class="error" hidden></p>
+    </form>
+
+    <ul id="results"></ul>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

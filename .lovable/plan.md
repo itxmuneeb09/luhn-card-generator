@@ -1,76 +1,102 @@
-# AutoFill Feature Plan
+# Aegon Hitter — Rebrand & Workflow Overhaul
 
-Add an "AutoFill" capability to the Luhn Card Generator extension so a generated test card can be injected into payment form fields on the active tab. Strictly for QA/sandbox/educational use.
+Rename the extension to **Aegon Hitter**, drop the batch generator UI, and replace it with a saved-BIN library + one-click Start that generates a single Luhn-valid card and AutoFills the active page. Strictly QA / sandbox / educational use — no auto-submit.
 
-## Changes
+## Extension changes (`/extension/`)
 
-### 1. `extension/manifest.json`
-- Add `"permissions": ["activeTab", "scripting"]`
-- Add `"host_permissions": ["<all_urls>"]` (needed to message a content script on arbitrary test pages; documented as QA-only in UI)
-- Register content script:
-  ```
-  "content_scripts": [{
-    "matches": ["<all_urls>"],
-    "js": ["content.js"],
-    "run_at": "document_idle",
-    "all_frames": true
-  }]
-  ```
+### `manifest.json`
+- `name`: "Aegon Hitter"
+- `description`: "One-click test card AutoFill from saved BINs. QA and sandbox use only."
+- Add `"storage"` to permissions (alongside existing `activeTab`, `scripting`)
+- Keep `host_permissions: ["<all_urls>"]` and the `content.js` content script registration
+- Bump version to `2.0.0`
+- New `icon.png` — neon shield/cyber crest replacing the credit card
 
-### 2. `extension/content.js` (new)
-- Listens via `chrome.runtime.onMessage` for `{ type: "AUTOFILL", card }`
-- Field detection strategy, in priority order:
-  1. `autocomplete` attribute: `cc-number`, `cc-exp`, `cc-exp-month`, `cc-exp-year`, `cc-csc`, `cc-name`
-  2. `name`/`id`/`placeholder`/`aria-label` regex match against:
-     - number: `card.*number|cc-?num|cardnum|number`
-     - expiry combined: `cc-?exp(?!-)|expir|exp-?date`
-     - month: `exp.*month|cc-?exp-?m|month`
-     - year: `exp.*year|cc-?exp-?y|year`
-     - cvv: `cvv|cvc|csc|security.*code`
-     - name: `card.*holder|cc-?name|name.*on.*card|holder`
-  3. Search inputs inside same form/section; also walk `iframe`-less same-origin subframes via `all_frames: true`
-- Format helpers:
-  - Expiry combined → `MM/YY` (also try `MM / YY` if input has slash already by inspecting placeholder)
-  - Split month/year fields → `MM` and `YY` or `YYYY` based on `maxlength`
-- Filling:
-  - Use native setter (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set`) to bypass React's synthetic input handling
-  - Dispatch `input` and `change` events with `bubbles: true`
-  - Also dispatch `blur` for Vue/Angular validators
-- Returns `{ filled: number, fields: string[] }` to popup; popup shows toast or "No payment form detected."
+### `popup.html` + `popup.css` (full redesign)
+Dark cyber UI:
+- Background `#05060a` with subtle scanline/grid overlay
+- Neon accents: cyan `#22d3ee`, magenta `#f0abfc`, lime `#a3e635`
+- Mono font (`JetBrains Mono`/`ui-monospace`), uppercase tracked labels
+- Glowing primary "START" button with pulse on hover
+- Tabs / sections: **Hitter** (main), **BINs** (library), **Settings**
 
-### 3. `extension/popup.js`
-- Each generated card row gets an "AutoFill" button (alongside existing copy actions)
-- Also a top-level "AutoFill first card" quick action
-- Handler:
-  ```
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  // Ensure content script present (programmatic injection fallback)
-  try {
-    const res = await chrome.tabs.sendMessage(tab.id, { type: "AUTOFILL", card });
-    showToast(res.filled ? `Filled ${res.filled} field(s)` : "No payment form detected.");
-  } catch {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ["content.js"] });
-    // retry sendMessage
-  }
-  ```
-- Card payload: `{ number, expMonth, expYear, cvv, name }` — name is generated client-side from a small fixed pool (e.g. "QA Tester", "Test User") since current generator has no name field
+Sections:
+1. **Header** — "AEGON HITTER" wordmark + small "QA / SANDBOX ONLY" tag
+2. **Active BIN card** — shows currently active BIN label + digits, "Change" link to BINs tab
+3. **START button** — large, full-width; on click → generate + autofill
+4. **Status line** — last result ("Filled 4 fields" / "No payment form detected.")
+5. **BINs tab** — list of saved BINs, each with: label, digits, length, Set Active, Delete; "Add BIN" form (label, digits 6–18, length 13–19)
+6. **Settings tab** — global cardholder name input, "Save" button
 
-### 4. `extension/popup.html` + `popup.css`
-- Add AutoFill button styling (subtle accent)
-- Add per-row inline button
+### `popup.js`
+Logic only — no batch generation, no CSV/TXT export.
 
-### 5. `src/routes/index.tsx` (landing page)
-- Add a short "AutoFill" section under "How to use":
-  - "Open a sandbox checkout page, click AutoFill on a generated card"
-  - Reiterate disclaimer: educational/QA/sandbox only
+State persisted in `chrome.storage.local`:
+```
+{
+  bins: [{ id, label, digits, length }],
+  activeBinId: string | null,
+  cardholderName: string
+}
+```
 
-### 6. Repackage
-- Rebuild `public/luhn-cards.zip` via existing nix zip command
+Functions:
+- `loadState()` / `saveState(patch)` — chrome.storage.local wrapper
+- `addBin({label, digits, length})`, `deleteBin(id)`, `setActive(id)`
+- `luhnCheckDigit(s)` (kept), `generateCardNumber(bin, length)`, `randomExpiry()`, `randomCvv(bin)` (Amex → 4 digits)
+- `start()`:
+  1. Load active BIN; if none → status "Add and select a BIN first."
+  2. Generate one card `{ number, mm, yy, cvv, name }`
+  3. `chrome.tabs.query({active, currentWindow})` → `chrome.tabs.sendMessage(tab.id, {type:"AUTOFILL", card})`
+  4. On failure, fall back to `chrome.scripting.executeScript({files:["content.js"]})` then retry
+  5. Update status line + flash glow on START button
+- Keyboard: Enter inside popup triggers Start
+
+### `content.js`
+**Keep current detection + filling logic unchanged** (already covers cc-number/cc-exp/cc-csc/cc-name + name/id/placeholder regexes, native setter, input/change/blur events).
+
+Add explicit safeguard at top of file comment: "Never clicks submit/pay buttons — fills only."
+
+No code path that calls `.click()` on buttons or submits forms.
+
+## Landing page (`src/routes/index.tsx` + tokens)
+
+Full redesign, dark cyber theme.
+
+### Design tokens (`src/styles.css`)
+Add semantic tokens:
+- `--background: oklch(0.13 0.02 260)` (near-black blue)
+- `--foreground: oklch(0.95 0.01 240)`
+- `--primary: oklch(0.78 0.18 200)` (neon cyan)
+- `--accent: oklch(0.72 0.25 320)` (magenta)
+- `--success: oklch(0.82 0.2 140)` (lime)
+- `--card: oklch(0.17 0.02 260)`
+- `--border: oklch(0.28 0.03 250)`
+- `--gradient-cyber: linear-gradient(135deg, var(--primary), var(--accent))`
+- `--shadow-glow: 0 0 40px color-mix(in oklab, var(--primary) 40%, transparent)`
+
+### Page sections
+- **Hero**: animated grid backdrop, glowing "AEGON HITTER" wordmark, tagline ("One-click test card autofill for QA engineers"), primary `Download Extension` button (keeps fetch+blob pattern, file is now `aegon-hitter.zip`)
+- **Workflow** (3 steps with neon-bordered cards):
+  1. Save your BINs
+  2. Pick the active one
+  3. Click START on a sandbox checkout
+- **Install** (keep current 4-step `chrome://extensions` flow, restyled)
+- **Disclaimer** card (kept, restyled with destructive-tinted border): explicit "QA, sandbox, demo environments only. Never auto-submits payments. Do not use on real payment pages."
+- Footer: small mono "v2.0.0 · QA-only build"
+
+### `head()` updates
+- Title: "Aegon Hitter — One-click QA Card AutoFill"
+- Description: "Save BINs once, click START, and AutoFill Luhn-valid test cards into your sandbox checkout — for QA engineers."
+
+## Packaging
+- Output renamed to `public/aegon-hitter.zip` (delete old `luhn-cards.zip`)
+- Re-zip via existing `nix run nixpkgs#zip` command
+- Update download href in landing page
 
 ## Out of scope
-- Persisting AutoFill across page navigations
-- Filling cross-origin iframes (Stripe Elements, Adyen hosted fields) — these are deliberately not supported; UI message will say "No payment form detected." in that case
-- Submitting the form automatically
-
-## Disclaimer (enforced in UI)
-Popup header and landing page will state: "Educational, QA, and sandbox payment testing only. Do not use on real payment pages."
+- Cloud sync of BINs (storage stays local)
+- Per-BIN cardholder names (one global name)
+- Auto-submit / one-click pay (explicitly forbidden)
+- Cross-origin hosted-field iframes (Stripe Elements etc.)
+- Importing/exporting BIN library

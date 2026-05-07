@@ -2,42 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Luhn Card Generator</title>
+    <title>Aegon Hitter</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <div class="grid-bg"></div>
     <header>
-      <h1>Luhn Card Generator</h1>
-      <p class="sub">Test cards only — not real payment instruments.</p>
+      <div class="brand">
+        <span class="logo">⬢</span>
+        <h1>AEGON<span>HITTER</span></h1>
+      </div>
+      <span class="tag">QA / SANDBOX ONLY</span>
     </header>
 
-    <form id="form">
-      <label>
-        <span>BIN / starting digits</span>
-        <input id="bin" type="text" inputmode="numeric" placeholder="414720" value="414720" maxlength="18" />
-      </label>
-      <div class="row">
-        <label>
-          <span>Length</span>
-          <input id="length" type="number" min="13" max="19" value="16" />
-        </label>
-        <label>
-          <span>Count</span>
-          <input id="count" type="number" min="1" max="100" value="10" />
-        </label>
-      </div>
-      <div class="actions">
-        <button type="submit" class="primary">Generate</button>
-        <button type="button" id="autofill-first">AutoFill</button>
-        <button type="button" id="csv">CSV</button>
-        <button type="button" id="txt">TXT</button>
-      </div>
-      <p id="error" class="error" hidden></p>
-    </form>
+    <nav class="tabs">
+      <button data-tab="hitter" class="tab active">Hitter</button>
+      <button data-tab="bins" class="tab">BINs</button>
+      <button data-tab="settings" class="tab">Settings</button>
+    </nav>
 
-    <ul id="results"></ul>
+    <!-- HITTER TAB -->
+    <section data-panel="hitter" class="panel active">
+      <div class="active-bin">
+        <span class="lbl">ACTIVE BIN</span>
+        <div id="active-bin-display" class="active-bin-display">— none —</div>
+      </div>
+      <button id="start" class="start-btn" type="button">
+        <span class="start-glyph">▶</span> START
+      </button>
+      <p id="status" class="status">Ready.</p>
+    </section>
 
-    <div id="toast" class="toast" hidden></div>
+    <!-- BINS TAB -->
+    <section data-panel="bins" class="panel">
+      <ul id="bin-list" class="bin-list"></ul>
+      <form id="bin-form" class="bin-form">
+        <div class="lbl">ADD BIN</div>
+        <input id="bin-label" type="text" placeholder="Label (e.g. Visa Sandbox)" maxlength="40" required />
+        <div class="row">
+          <input id="bin-digits" type="text" inputmode="numeric" placeholder="Digits (e.g. 414720)" maxlength="18" required />
+          <input id="bin-length" type="number" min="13" max="19" value="16" required />
+        </div>
+        <button type="submit" class="ghost-btn">+ SAVE BIN</button>
+        <p id="bin-error" class="error" hidden></p>
+      </form>
+    </section>
+
+    <!-- SETTINGS TAB -->
+    <section data-panel="settings" class="panel">
+      <form id="settings-form" class="bin-form">
+        <div class="lbl">CARDHOLDER NAME</div>
+        <input id="cardholder" type="text" placeholder="QA Tester" maxlength="50" />
+        <button type="submit" class="ghost-btn">SAVE</button>
+        <p id="settings-status" class="muted"></p>
+      </form>
+    </section>
 
     <script src="popup.js"></script>
   </body>
